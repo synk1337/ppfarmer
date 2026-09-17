@@ -1,0 +1,109 @@
+# Builds ppfarmer.exe and publishes it as a GitHub release.
+#
+# Every push to master releases a new version, with the minor number bumped
+# from the latest existing tag: v1.0 -> v1.1 -> v1.2. Nothing to tag by hand.
+#
+# Two ways out:
+#   - put [skip release] anywhere in the commit message to build without
+#     publishing, for a README fix or a comment change;
+#   - run it from the Actions tab (workflow_dispatch) to get the executable
+#     as an artifact without creating a release.
+#
+# Tests run before the version is computed, so a broken push never becomes a
+# release.
+
+name: release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # needed to create the tag and the release
+
+# Two pushes in quick succession would otherwise race for the same version
+# number. Later pushes wait rather than cancel, so no commit is skipped.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # tags are needed to work out the next version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Run tests
+        run: python tests/test_logic.py
+
+      - name: Build the executable
+        run: pyinstaller --noconfirm --clean ppfarmer.spec
+
+      # Kept even when a release follows: the artifact stays downloadable from
+      # the run itself, which helps if a release is later deleted or replaced.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ppfarmer-windows
+          path: dist/ppfarmer.exe
+
+      - name: Work out the next version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Highest existing vMAJOR.MINOR tag, sorted as versions rather than
+          # as text so v1.10 ranks above v1.9.
+          last=$(git tag -l 'v[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$last" ]; then
+            next="v1.0"
+          else
+            major=${last#v}; major=${major%%.*}
+            minor=${last##*.}
+            next="v${major}.$((minor + 1))"
+          fi
+          # A tag that already exists would make the release step fail; skip
+          # rather than break the run.
+          if git rev-parse -q --verify "refs/tags/$next" >/dev/null; then
+            echo "tag $next already exists, not releasing"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "previous: ${last:-none} -> next: $next"
+            echo "version=$next" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "--- outputs ---"
+          cat "$GITHUB_OUTPUT"
+
+      # Kept on one line on purpose: a `|` block keeps its newlines, which
+      # the expression parser does not accept, and the step is silently
+      # skipped while the run still reports success.
+      - name: Publish the release
+        if: ${{ github.event_name == 'push' && steps.version.outputs.release == 'true' && !contains(github.event.head_commit.message, '[skip release]') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ppfarmer ${{ steps.version.outputs.version }}
+          files: dist/ppfarmer.exe
+          generate_release_notes: true
+          body: |
+            Download `ppfarmer.exe` below and run it. No Python needed.
+
+            On first launch it asks for two things: an osu! API client
+            (created in your account settings, it takes a minute) and the
+            URL of your osu! profile. Both are stored locally.
+
+            Windows SmartScreen will warn about an unknown publisher: the
+            executable is unsigned. Choose "More info" then "Run anyway", or
+            build it yourself from source.

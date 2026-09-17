@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+ppfarmer.db
+.venv/
+crawl.log
+.osu_cache/
+build/
+dist/
+*.manifest

@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ppfarmer</title>
+<style>
+  :root {
+    --bg: #f6f6f8; --panel: #ffffff; --ink: #16161a; --muted: #6b6b78;
+    --line: #e2e2e8; --accent: #e8407a; --good: #1a9e5c; --warn: #b7791f;
+    --bad: #c0392b; --chip: #f0f0f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131317; --panel: #1b1b21; --ink: #ecedf1; --muted: #9a9aa8;
+      --line: #2b2b34; --accent: #ff5c92; --good: #3ecf8e; --warn: #e0a83c;
+      --bad: #ff7063; --chip: #24242c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10; background: var(--panel);
+    border-bottom: 1px solid var(--line); padding: 12px 20px;
+  }
+  .who { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .who h1 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+  .who span { color: var(--muted); font-size: 13px; }
+  .who button.link {
+    background: none; border: 0; color: var(--accent); font: inherit;
+    font-size: 12.5px; cursor: pointer; padding: 0; text-decoration: underline;
+  }
+  .tabs { display: flex; gap: 4px; margin: 10px 0 0; }
+  .tabs button {
+    background: none; border: 0; border-bottom: 2px solid transparent;
+    color: var(--muted); font: inherit; font-weight: 600; font-size: 13px;
+    padding: 6px 12px; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--accent); }
+  .controls {
+    display: grid; gap: 12px 18px; margin-top: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+  .ctl { display: flex; flex-direction: column; gap: 4px; }
+  .ctl label, .ctl > .lab {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); font-weight: 600;
+  }
+  .val { color: var(--ink); font-weight: 400; text-transform: none;
+         letter-spacing: 0; font-size: 12px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=search], input[type=number], input[type=text],
+  input[type=password], select {
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 13px;
+    width: 100%;
+  }
+  .toggles { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .toggles label { display: flex; align-items: center; gap: 6px; font-size: 13px;
+                   color: var(--ink); text-transform: none; letter-spacing: 0;
+                   font-weight: 400; cursor: pointer; }
+  main { padding: 16px 20px 60px; }
+  .count { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  /* Scoped to the map list: these rules used to hit every <li> on the page,
+     including the steps inside the setup dialog, which turned them into
+     three-column cards. */
+  #list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  #list > li {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; display: grid; gap: 6px;
+    grid-template-columns: 42px 1fr auto; align-items: start;
+  }
+  .idx { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px;
+         padding-top: 1px; }
+  .title { font-weight: 600; word-break: break-word; }
+  .title a { color: inherit; text-decoration: none; }
+  .title a:hover { color: var(--accent); text-decoration: underline; }
+  .diff { color: var(--muted); font-weight: 400; }
+  .meta { grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap;
+          font-size: 12.5px; color: var(--muted); align-items: center; }
+  .chip { background: var(--chip); border-radius: 999px; padding: 1px 8px;
+          font-variant-numeric: tabular-nums; }
+  .chip.ceiling { color: var(--accent); font-weight: 600; }
+  button.ask {
+    background: none; border: 1px dashed var(--line); color: var(--muted);
+    border-radius: 999px; padding: 1px 8px; font: inherit; font-size: 12.5px;
+    cursor: pointer;
+  }
+  button.ask:hover { border-style: solid; color: var(--accent); }
+  button.ask:disabled { opacity: .6; cursor: progress; }
+  .gain { color: var(--good); font-weight: 600; font-variant-numeric: tabular-nums;
+          text-align: right; white-space: nowrap; padding-top: 1px; }
+  .gain.zero { color: var(--muted); font-weight: 400; }
+  .mine { grid-column: 2 / -1; font-size: 12.5px; color: var(--warn);
+          border-left: 2px solid var(--warn); padding-left: 8px; }
+  .played { color: var(--warn); font-size: 11px; font-weight: 700;
+            letter-spacing: .04em; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  .empty b { color: var(--ink); display: block; margin-bottom: 6px; font-size: 15px; }
+  .empty button { background: var(--accent); color: #fff; border: 0; border-radius: 7px;
+                  padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer;
+                  margin-top: 12px; }
+  .bar { height: 3px; background: var(--accent); opacity: .25; border-radius: 2px;
+         grid-column: 1 / -1; }
+  /* --- crawl tab --- */
+  .card { background: var(--panel); border: 1px solid var(--line);
+          border-radius: 10px; padding: 18px 20px; max-width: 880px; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .card p.note { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .grid { display: grid; gap: 14px 20px;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .actions { margin-top: 18px; display: flex; gap: 12px; align-items: center; }
+  button.go {
+    background: var(--accent); color: #fff; border: 0; border-radius: 7px;
+    padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.go:disabled { opacity: .5; cursor: not-allowed; }
+  button.stop {
+    background: none; color: var(--bad); border: 1px solid var(--bad);
+    border-radius: 7px; padding: 8px 16px; font: inherit; font-weight: 600;
+    cursor: pointer;
+  }
+  button.stop:disabled { opacity: .5; cursor: not-allowed; }
+  .progress { margin-top: 16px; }
+  .track { height: 6px; background: var(--chip); border-radius: 3px; overflow: hidden; }
+  .fill { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .status { font-size: 13px; margin-top: 8px; color: var(--muted); }
+  .status.error { color: var(--bad); }
+  .status.done { color: var(--good); }
+  .status.cancelled { color: var(--warn); }
+  .est { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  /* --- profile dialog --- */
+  dialog {
+    border: 1px solid var(--line); border-radius: 12px; padding: 0;
+    background: var(--panel); color: var(--ink); max-width: 460px; width: 92%;
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  .modal { padding: 22px 24px; }
+  .modal h2 { margin: 0 0 6px; font-size: 16px; }
+  .modal p { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .modal .row { display: flex; gap: 10px; margin-top: 14px; align-items: center; }
+  .modal .err { color: var(--bad); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .modal .steps {
+    color: var(--muted); font-size: 13px; margin: 0 0 18px;
+    padding-left: 22px; list-style: decimal; display: block;
+  }
+  .modal .steps li {
+    display: list-item; background: none; border: 0; padding: 0;
+    margin: 0 0 7px; line-height: 1.5;
+  }
+  .modal .steps li::marker { color: var(--accent); font-weight: 600; }
+  .modal .steps b { color: var(--ink); font-weight: 600; }
+  .modal .steps a { color: var(--accent); }
+  .modal .flab { display: block; font-size: 11px; text-transform: uppercase;
+                 letter-spacing: .05em; color: var(--muted); font-weight: 600;
+                 margin: 10px 0 3px; }
+  .modal .fine { color: var(--muted); font-size: 11.5px; margin: 14px 0 0; }
+</style>
+</head>
+<body>
+
+<dialog id="credsDlg">
+  <form method="dialog" class="modal" id="credsForm">
+    <h2>Connect to the osu! API</h2>
+    <p>ppfarmer needs its own API client, every user can create one. You will only need to do this once.</p>
+    <ol class="steps">
+      <li>Open <a href="https://osu.ppy.sh/home/account/edit" target="_blank"
+          rel="noopener">your osu! account settings</a> and scroll to
+          <b>OAuth</b>.</li>
+      <li>Click <b>New OAuth Application</b>, give it any name, leave the
+          callback URL empty, then <b>Register application</b>.</li>
+      <li>Copy the <b>Client ID</b> and the <b>Client Secret</b> below.</li>
+    </ol>
+    <label class="flab" for="credId">Client ID</label>
+    <input type="text" id="credId" placeholder="12345" autocomplete="off" spellcheck="false">
+    <label class="flab" for="credSecret">Client Secret</label>
+    <input type="password" id="credSecret" autocomplete="off" spellcheck="false">
+    <div class="err" id="credsErr"></div>
+    <div class="row">
+      <button class="go" id="credsOk" value="ok">Save</button>
+    </div>
+    <p class="fine">Stored locally. Do not share these with anyone. It's yours only.</p>
+  </form>
+</dialog>
+
+<dialog id="profileDlg">
+  <form method="dialog" class="modal" id="profileForm">
+    <h2>Your osu! profile</h2>
+    <p>Paste the link to your profile. Everything is ranked relative to your
+       global rank, so this is the one thing the app needs.</p>
+    <input type="text" id="profileUrl" placeholder="https://osu.ppy.sh/users/4721909"
+           autocomplete="off" spellcheck="false">
+    <div class="err" id="profileErr"></div>
+    <div class="row">
+      <button class="go" id="profileOk" value="ok">Continue</button>
+      <button class="stop" id="profileCancel" value="cancel" formnovalidate hidden>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<header>
+  <div class="who" id="who"><h1>Loading…</h1></div>
+  <div class="tabs" role="tablist">
+    <button id="tab-maps" role="tab" aria-selected="true">Maps</button>
+    <button id="tab-crawl" role="tab" aria-selected="false">Crawl</button>
+  </div>
+  <div class="controls" id="filters">
+    <div class="ctl">
+      <label for="sort">Sort by</label>
+      <select id="sort">
+        <option value="players">Popularity</option>
+        <option value="gain">pp gain</option>
+        <option value="pp">Typical pp</option>
+        <option value="efficiency">pp per minute</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <span class="lab">Top counted <span class="val" id="topnv">10</span></span>
+      <input type="range" id="topn" min="1" max="100" step="1" value="10">
+    </div>
+    <div class="ctl">
+      <span class="lab">Min. support <span class="val" id="minpv"></span></span>
+      <input type="range" id="minp" min="5" max="200" step="1">
+    </div>
+    <div class="ctl">
+      <span class="lab">Star rating <span class="val" id="starv">any</span></span>
+      <input type="range" id="starmin" min="0" max="10" step="0.1" value="0">
+      <input type="range" id="starmax" min="0" max="10" step="0.1" value="10">
+    </div>
+    <div class="ctl">
+      <span class="lab">Played length <span class="val" id="lenv">any</span></span>
+      <input type="range" id="lenmin" min="0" max="360" step="5" value="0">
+      <input type="range" id="lenmax" min="0" max="360" step="5" value="360">
+    </div>
+    <div class="ctl">
+      <span class="lab">Score years <span class="val" id="yearv">any</span></span>
+      <input type="range" id="yearmin" min="2007" max="2026" step="1" value="2007">
+      <input type="range" id="yearmax" min="2007" max="2026" step="1" value="2026">
+    </div>
+    <div class="ctl">
+      <label for="scoring">Game version</label>
+      <select id="scoring">
+        <option value="all">stable + lazer</option>
+        <option value="stable">stable only (Classic)</option>
+        <option value="lazer">lazer only</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <span class="lab">Mods</span>
+      <div class="toggles" id="modbox">
+        <label><input type="checkbox" class="modf" value="NM" checked> NM</label>
+        <label><input type="checkbox" class="modf" value="HD" checked> HD</label>
+        <label><input type="checkbox" class="modf" value="HR" checked> HR</label>
+        <label><input type="checkbox" class="modf" value="DT" checked> DT</label>
+        <label><input type="checkbox" class="modf" value="HDHR" checked> HDHR</label>
+        <label><input type="checkbox" class="modf" value="DTHD" checked> HDDT</label>
+        <label><input type="checkbox" class="modf" value="OTHER" checked> other</label>
+      </div>
+    </div>
+    <div class="ctl">
+      <label for="q">Search</label>
+      <input type="search" id="q" placeholder="title, artist, difficulty…">
+    </div>
+    <div class="ctl">
+      <span class="lab">Display</span>
+      <div class="toggles">
+        <label><input type="checkbox" id="hideplayed"> hide played</label>
+        <label><input type="checkbox" id="onlygain"> gain &gt; 0</label>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="view-maps">
+    <div class="count" id="count"></div>
+    <ol id="list"></ol>
+  </section>
+
+  <section id="view-crawl" hidden>
+    <div class="card">
+      <h2>Run a crawl</h2>
+      <p class="note">
+        Fills the database from the osu! API, sweeping the 50 countries on the
+        <a href="https://osu.ppy.sh/rankings/osu/country" target="_blank" rel="noopener">first
+        page of the country ranking</a>. A cache is kept for 30 days to avoid repeated requests for the same scores.
+      </p>
+      <div class="grid">
+        <div class="ctl">
+          <label for="c_players">Players to analyse</label>
+          <input type="number" id="c_players" min="50" max="20000" step="100" value="1000">
+          <span class="hint">The players just above your rank. You will never get 100% of players above a certain rank.</span>
+        </div>
+        <div class="ctl">
+          <label for="c_fetch">Scores fetched per player</label>
+          <input type="number" id="c_fetch" min="10" max="100" step="10" value="100">
+          <span class="hint">Same cost up to 100</span>
+        </div>
+        <div class="ctl">
+          <label for="c_target">Stop early (players)</label>
+          <input type="number" id="c_target" min="0" max="100000" step="100" value="0">
+          <span class="hint">0 = no limit</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="go" id="c_go">Start crawl</button>
+        <button class="stop" id="c_stop" hidden>Cancel</button>
+        <span class="est" id="c_est"></span>
+      </div>
+      <div class="progress" id="c_progress" hidden>
+        <div class="track"><div class="fill" id="c_fill"></div></div>
+        <div class="status" id="c_status"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const COMMON = new Set(["NM", "HD", "HR", "DT", "HDHR", "DTHD"]);
+const PAYS = 50;   // fixed: the first page of the country ranking
+const RPM = 60;    // fixed: the rate the ppy wiki asks callers to keep
+let YEARS = {min: 2007, max: 2026};
+let DATA = null, LIMIT = 60, POLL = null, YEAR_TIMER = null;
+
+const fmtLen = s => s == null ? "?" : `${Math.floor(s/60)}m${String(Math.round(s%60)).padStart(2,"0")}`;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = n => (n ?? 0).toLocaleString("en-US");
+
+/* ---------- remembering the filters ----------
+   localStorage rather than the server: these are per-browser conveniences,
+   and it survives a reload as well as a restart of the local process. Every
+   accessor is guarded, because a browser set to block site data throws
+   instead of returning null. */
+const STORE_KEY = "ppfarmer.filters";
+const FILTER_IDS = ["sort", "topn", "minp", "starmin", "starmax", "lenmin",
+                    "lenmax", "q", "scoring", "yearmin", "yearmax",
+                    "hideplayed", "onlygain"];
+
+function saveFilters() {
+  try {
+    const state = {};
+    for (const id of FILTER_IDS) {
+      const el = $(id);
+      state[id] = el.type === "checkbox" ? el.checked : el.value;
+    }
+    state.mods = [...document.querySelectorAll(".modf")]
+      .map(e => [e.value, e.checked]);
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) { /* storage unavailable: filters simply will not persist */ }
+}
+
+function restoreFilters() {
+  let state = null;
+  try { state = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); }
+  catch (e) { return; }
+  if (!state) return;
+  for (const id of FILTER_IDS) {
+    if (!(id in state)) continue;
+    const el = $(id);
+    if (el.type === "checkbox") {
+      el.checked = !!state[id];
+    } else {
+      el.value = state[id];
+      // Marks the control as deliberately set, so load() does not overwrite
+      // it with the default it computes from the panel size.
+      el.dataset.touched = "1";
+    }
+  }
+  if (Array.isArray(state.mods)) {
+    for (const [value, checked] of state.mods) {
+      const el = document.querySelector(`.modf[value="${value}"]`);
+      if (el) el.checked = checked;
+    }
+  }
+  $("topnv").textContent = $("topn").value;
+}
+
+function resetFilters() {
+  try { localStorage.removeItem(STORE_KEY); } catch (e) { /* nothing to clear */ }
+  location.reload();
+}
+
+/* ---------- credentials dialog ---------- */
+function askCredentials() {
+  $("credsErr").textContent = "";
+  $("credsDlg").showModal();
+  $("credId").focus();
+}
+
+$("credsForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = $("credsOk");
+  btn.disabled = true;
+  $("credsErr").textContent = "";
+  try {
+    const r = await fetch("/api/credentials", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        client_id: $("credId").value, client_secret: $("credSecret").value,
+      }),
+    });
+    const res = await r.json();
+    if (!res.ok) { $("credsErr").textContent = res.message; return; }
+    $("credsDlg").close();
+    load(+$("topn").value);
+  } catch (err) {
+    $("credsErr").textContent = "Could not reach the local server.";
+  } finally { btn.disabled = false; }
+});
+
+/* ---------- profile dialog ---------- */
+function askProfile(cancellable) {
+  $("profileErr").textContent = "";
+  $("profileCancel").hidden = !cancellable;
+  $("profileDlg").showModal();
+  $("profileUrl").focus();
+}
+
+$("profileForm").addEventListener("submit", async e => {
+  // The dialog must stay open while the server resolves the profile, and
+  // close only once it succeeded.
+  e.preventDefault();
+  const btn = $("profileOk");
+  btn.disabled = true;
+  $("profileErr").textContent = "";
+  try {
+    const r = await fetch("/api/profile", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({url: $("profileUrl").value}),
+    });
+    const res = await r.json();
+    if (!res.ok) { $("profileErr").textContent = res.message; return; }
+    $("profileDlg").close();
+    load(+$("topn").value);
+  } catch (err) {
+    $("profileErr").textContent = "Could not reach the local server.";
+  } finally { btn.disabled = false; }
+});
+
+$("profileCancel").addEventListener("click", e => {
+  e.preventDefault();
+  $("profileDlg").close();
+});
+
+/* ---------- tabs ---------- */
+function showTab(name) {
+  const maps = name === "maps";
+  $("tab-maps").setAttribute("aria-selected", maps);
+  $("tab-crawl").setAttribute("aria-selected", !maps);
+  $("view-maps").hidden = !maps;
+  $("view-crawl").hidden = maps;
+  $("filters").hidden = !maps;
+}
+$("tab-maps").onclick = () => showTab("maps");
+$("tab-crawl").onclick = () => showTab("crawl");
+
+/* ---------- data ---------- */
+async function load(topN) {
+  $("count").textContent = "Loading…";
+  // Scoring version and year window change the aggregation itself, so the
+  // server has to redo it.
+  const sc = $("scoring").value;
+  let ymin = +$("yearmin").value, ymax = +$("yearmax").value;
+  if (ymin > ymax) [ymin, ymax] = [ymax, ymin];
+  const r = await fetch(
+    `/api/data?top_n=${topN}&scoring=${sc}&year_min=${ymin}&year_max=${ymax}`);
+  DATA = await r.json();
+
+  if (DATA.needs_profile) {
+    $("who").innerHTML = "<h1>ppfarmer</h1>";
+    $("count").textContent = "";
+    $("list").innerHTML = "";
+    // API credentials come first: without them the profile cannot be resolved.
+    if (DATA.needs_credentials) askCredentials(); else askProfile(false);
+    return;
+  }
+
+  const u = DATA.user;
+  $("who").innerHTML =
+    `<h1>${esc(u.name)}</h1>` +
+    `<span>#${num(u.rank)} · ${Math.round(u.pp)}pp · ${esc(u.country)}</span>` +
+    `<span>band #${num(DATA.band.low)}–#${num(DATA.band.high)} · ` +
+    `${num(DATA.panel)} players analysed · ${num(DATA.band.spread)} ranks</span>` +
+    `<button class="link" id="changeProfile">change profile</button>`;
+  $("changeProfile").onclick = () => askProfile(true);
+
+  if (!DATA.panel) {
+    $("count").textContent = "";
+    $("list").innerHTML =
+      `<div class="empty"><b>No data for this band yet.</b>` +
+      `No player between #${num(DATA.band.low)} and #${num(DATA.band.high)} ` +
+      `has been fetched so far.` +
+      `<br><button id="goCrawl">Go to the Crawl tab</button></div>`;
+    $("goCrawl").onclick = () => showTab("crawl");
+    showTab("crawl");
+    return;
+  }
+
+  // Year sliders follow the years actually present in the database.
+  if (DATA.years) {
+    YEARS = DATA.years;
+    for (const id of ["yearmin", "yearmax"]) {
+      $(id).min = YEARS.min; $(id).max = YEARS.max;
+    }
+    if (!$("yearmin").dataset.touched) {
+      $("yearmin").value = YEARS.min; $("yearmax").value = YEARS.max;
+    } else {
+      // A restored value can sit outside the years the database now holds.
+      for (const id of ["yearmin", "yearmax"]) {
+        $(id).value = Math.min(YEARS.max, Math.max(YEARS.min, +$(id).value));
+      }
+    }
+    const f = DATA.year_filter || {};
+    $("yearv").textContent = (f.min == null || (f.min <= YEARS.min && f.max >= YEARS.max))
+      ? "any" : `${f.min} – ${f.max}`;
+  }
+
+  // The depth slider never goes past what the crawl actually fetched.
+  const topn = $("topn");
+  topn.max = DATA.max_depth || 100;
+  if (+topn.value > +topn.max) { topn.value = topn.max; $("topnv").textContent = topn.max; }
+
+  const def = Math.max(5, Math.round(DATA.panel * 0.03));
+  const slider = $("minp");
+  // The server sends nothing below this floor: the slider must not suggest
+  // it can go lower.
+  slider.min = DATA.min_players_floor || 5;
+  slider.max = Math.max(+slider.min + 5, Math.round(DATA.panel * 0.25));
+  if (!slider.dataset.touched) slider.value = def;
+  if (DATA.panel) $("c_players").value = DATA.panel;
+  estimate();
+  render();
+}
+
+function current() {
+  const f = {
+    sort: $("sort").value, minp: +$("minp").value,
+    smin: +$("starmin").value, smax: +$("starmax").value,
+    lmin: +$("lenmin").value, lmax: +$("lenmax").value,
+    q: $("q").value.trim().toLowerCase(),
+    mods: new Set([...document.querySelectorAll(".modf:checked")].map(e => e.value)),
+    hide: $("hideplayed").checked, onlygain: $("onlygain").checked,
+  };
+  if (f.smin > f.smax) [f.smin, f.smax] = [f.smax, f.smin];
+  if (f.lmin > f.lmax) [f.lmin, f.lmax] = [f.lmax, f.lmin];
+  return f;
+}
+
+function render() {
+  if (!DATA || !DATA.maps) return;
+  const f = current();
+  $("minpv").textContent = `${f.minp} players`;
+  $("starv").textContent = (f.smin <= 0 && f.smax >= 10) ? "any" : `${f.smin.toFixed(1)} – ${f.smax.toFixed(1)}`;
+  $("lenv").textContent = (f.lmin <= 0 && f.lmax >= 360) ? "any" : `${fmtLen(f.lmin)} – ${fmtLen(f.lmax)}`;
+
+  let maps = DATA.maps.filter(m => {
+    if (m.players < f.minp) return false;
+    if (m.stars == null || m.stars < f.smin || m.stars > f.smax) return false;
+    if (f.lmin > 0 || f.lmax < 360) {
+      if (m.played_length == null || m.played_length < f.lmin || m.played_length > f.lmax) return false;
+    }
+    // "other" covers anything that is not a common combination.
+    if (!f.mods.has(m.mods) && !(f.mods.has("OTHER") && !COMMON.has(m.mods))) return false;
+    if (f.hide && m.played) return false;
+    if (f.onlygain && !(m.gain > 0)) return false;
+    if (f.q && !`${m.artist} ${m.title} ${m.version}`.toLowerCase().includes(f.q)) return false;
+    return true;
+  });
+
+  const key = { players: m => m.players, gain: m => m.gain ?? 0, pp: m => m.typical_pp ?? 0,
+                efficiency: m => m.pp_per_min ?? 0 }[f.sort];
+  maps.sort((a, b) => key(b) - key(a) || b.players - a.players);
+
+  $("count").textContent =
+    `${num(maps.length)} row${maps.length > 1 ? "s" : ""} — top ${DATA.top_n} of ${num(DATA.panel)} players`
+    + (DATA.cutoff ? ` · your 100th score is worth ${Math.round(DATA.cutoff)}pp` : "");
+
+  const max = Math.max(...maps.slice(0, LIMIT).map(m => m.players), 1);
+  $("list").innerHTML = maps.slice(0, LIMIT).map((m, i) => {
+    const gain = m.gain == null ? "" :
+      m.gain < 0.05 ? `<div class="gain zero">+0</div>` : `<div class="gain">+${m.gain.toFixed(1)}pp</div>`;
+    const mine = m.played ? `<div class="mine">your score: ${Math.round(m.my_pp)}pp · ${(m.my_accuracy*100).toFixed(2)}% · ${esc(m.my_rank)} · ${esc(m.my_mods)} · ${m.my_fc ? "FC" : "no FC"}${
+        m.typical_pp > m.my_pp ? ` · ${Math.round(m.typical_pp - m.my_pp)}pp to gain` : " · already above the band"}</div>` : "";
+    const years = Object.entries(m.years || {}).map(([a, n]) => `${a}: ${n}`).join(", ");
+    return `<li>
+      <div class="idx">${i + 1}</div>
+      <div class="title"><a href="${m.url}" target="_blank" rel="noopener">${esc(m.artist)} – ${esc(m.title)}</a>
+        <span class="diff">[${esc(m.version)}]</span>${m.played ? ' <span class="played">PLAYED</span>' : ""}</div>
+      ${gain}
+      <div class="meta">
+        <span class="chip">${num(m.players)} players (${(m.share*100).toFixed(0)}%)</span>
+        <span class="chip">${m.stars == null ? "?" : m.stars.toFixed(2)}★</span>
+        <span class="chip">${esc(m.mods)}</span>
+        ${(m.stable_players && m.lazer_players)
+          ? `<span class="chip" title="${m.stable_players} scores submitted from stable (Classic mod), ${m.lazer_players} from lazer">${m.stable_players} st / ${m.lazer_players} lz</span>`
+          : (m.stable_players ? `<span class="chip" title="all submitted from stable">stable</span>` : "")}
+        <span class="chip" title="Median of the ${m.mods_players} ${esc(m.mods)} scores by players in the band who have this map in their top ${DATA.top_n}. Mean: ${m.mean_pp == null ? "?" : Math.round(m.mean_pp)}pp.">${m.typical_pp == null ? "?" : Math.round(m.typical_pp)}pp med / ${m.mean_pp == null ? "?" : Math.round(m.mean_pp)} mean (${m.mods_players})</span>
+        <span class="chip">${fmtLen(m.played_length)}</span>
+        ${m.median_year == null ? "" : `<span class="chip" title="Median year of those scores. Breakdown: ${years}">${m.median_year}</span>`}
+        ${f.sort === "efficiency" && m.pp_per_min ? `<span class="chip">${Math.round(m.pp_per_min)}pp/min</span>` : ""}
+        ${m.max_pp != null
+          ? `<span class="chip ceiling" title="pp for a perfect SS with ${esc(m.mods)}, lazer scoring">${Math.round(m.max_pp)}pp max SS</span>`
+          : `<button class="ask" data-bid="${m.beatmap_id}" data-mods="${esc(m.mods)}" title="Compute the pp of a perfect SS with ${esc(m.mods)}">max pp ?</button>`}
+      </div>
+      ${mine}
+      <div class="bar" style="width:${(m.players / max * 100).toFixed(1)}%"></div>
+    </li>`;
+  }).join("") ||
+    `<div class="empty"><b>No map matches these filters.</b>` +
+    `Your settings are remembered between visits, so this may be a filter you ` +
+    `set earlier.<br><button id="resetFilters">Reset all filters</button></div>`;
+  if ($("resetFilters")) $("resetFilters").onclick = resetFilters;
+}
+
+/* A map's ceiling is computed on click: downloading the .osu of every listed
+   map would cost hours for rows nobody ever looks at. */
+async function askCeiling(btn) {
+  const bid = +btn.dataset.bid, mods = btn.dataset.mods;
+  btn.disabled = true;
+  btn.textContent = "computing…";
+  try {
+    const r = await fetch("/api/ceiling", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({beatmap_id: bid, mods}),
+    });
+    const got = await r.json();
+    if (got.pp == null) { btn.textContent = "unavailable"; return; }
+    for (const m of DATA.maps) {
+      if (m.beatmap_id === bid && m.mods === mods) m.max_pp = got.pp;
+    }
+    render();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "retry";
+  }
+}
+
+$("list").addEventListener("click", e => {
+  const btn = e.target.closest("button.ask");
+  if (btn) askCeiling(btn);
+});
+
+["sort","minp","starmin","starmax","lenmin","lenmax","q","hideplayed","onlygain"]
+  .forEach(id => $(id).addEventListener("input", () => { render(); saveFilters(); }));
+document.querySelectorAll(".modf")
+  .forEach(e => e.addEventListener("input", () => { render(); saveFilters(); }));
+$("minp").addEventListener("input", e => { e.target.dataset.touched = "1"; });
+$("topn").addEventListener("input", e => { $("topnv").textContent = e.target.value; });
+$("topn").addEventListener("change", e => { saveFilters(); load(+e.target.value); });
+$("scoring").addEventListener("change", () => { saveFilters(); load(+$("topn").value); });
+
+// Year sliders change the aggregation: wait for the gesture to end.
+for (const id of ["yearmin", "yearmax"]) {
+  $(id).addEventListener("input", e => { e.target.dataset.touched = "1"; });
+  $(id).addEventListener("input", () => {
+    let a = +$("yearmin").value, b = +$("yearmax").value;
+    if (a > b) [a, b] = [b, a];
+    $("yearv").textContent = (a <= YEARS.min && b >= YEARS.max) ? "any" : `${a} – ${b}`;
+  });
+  $(id).addEventListener("change", () => {
+    saveFilters();
+    clearTimeout(YEAR_TIMER);
+    YEAR_TIMER = setTimeout(() => load(+$("topn").value), 150);
+  });
+}
+
+addEventListener("scroll", () => {
+  if (innerHeight + scrollY > document.body.offsetHeight - 400) { LIMIT += 60; render(); }
+});
+
+/* ---------- crawl ---------- */
+function estimate() {
+  // ~9 binary-search requests per country, then one per player kept.
+  const players = +$("c_players").value;
+  const req = PAYS * 9 + players;
+  $("c_est").textContent =
+    `≈ ${num(req)} requests, ~${Math.round(req / RPM)} min at worst (the cache cuts into that)`;
+}
+$("c_players").addEventListener("input", estimate);
+
+$("c_stop").onclick = async () => {
+  $("c_stop").disabled = true;
+  const res = await (await fetch("/api/crawl/stop", {method: "POST"})).json();
+  $("c_status").textContent = res.message;
+  if (!res.ok) $("c_stop").disabled = false;
+};
+
+$("c_go").onclick = async () => {
+  $("c_go").disabled = true;
+  $("c_stop").hidden = false;
+  $("c_stop").disabled = false;
+  $("c_progress").hidden = false;
+  $("c_status").className = "status";
+  $("c_status").textContent = "Starting…";
+  const body = {
+    players: +$("c_players").value,
+    fetch_n: +$("c_fetch").value, target: +$("c_target").value,
+  };
+  const res = await (await fetch("/api/crawl", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  })).json();
+  if (!res.ok) {
+    $("c_status").className = "status error";
+    $("c_status").textContent = res.message;
+    $("c_go").disabled = false;
+    $("c_stop").hidden = true;
+    return;
+  }
+  if (POLL) clearInterval(POLL);
+  POLL = setInterval(poll, 1000);
+};
+
+async function poll() {
+  const s = await (await fetch("/api/crawl")).json();
+  let pct = 0, txt = s.message || "";
+  if (s.phase === "discovery" && s.countries_total) {
+    pct = s.countries_done / s.countries_total * 40;
+    txt = `Discovery ${s.countries_done}/${s.countries_total} countries — ${s.message}`;
+  } else if (s.phase === "fetching" && s.players_total) {
+    pct = 40 + s.players_done / s.players_total * 60;
+    const left = Math.round((s.players_total - s.players_done) / RPM);
+    txt = `Fetching ${num(s.players_done)}/${num(s.players_total)} tops — ~${left} min left`;
+  }
+  $("c_fill").style.width = `${pct}%`;
+  $("c_status").textContent = txt;
+  if (s.state === "done" || s.state === "cancelled") {
+    clearInterval(POLL); POLL = null;
+    const r = s.report || {};
+    if (s.state === "done") {
+      $("c_fill").style.width = "100%";
+      $("c_status").className = "status done";
+      $("c_status").textContent = s.message +
+        (r.unreachable?.length ? ` Out of reach: ${r.unreachable.join(", ")} (~${Math.round((r.lost_share||0)*100)}% of players).` : "");
+    } else {
+      $("c_status").className = "status cancelled";
+      $("c_status").textContent = s.message;
+    }
+    $("c_go").disabled = false;
+    $("c_stop").hidden = true;
+    load(+$("topn").value);
+  } else if (s.state === "error") {
+    clearInterval(POLL); POLL = null;
+    $("c_status").className = "status error";
+    $("c_status").textContent = `Error: ${s.message}`;
+    $("c_go").disabled = false;
+    $("c_stop").hidden = true;
+  }
+}
+
+estimate();
+// Restored first, so the very first fetch already uses the saved depth,
+// scoring version and year window.
+restoreFilters();
+load(+$("topn").value);
+</script>
+</body>
+</html>
